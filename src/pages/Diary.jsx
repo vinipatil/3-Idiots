@@ -1,23 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 
 export default function DiaryPage() {
-  const [notes, setNotes] = useState(() => {
-    const saved = localStorage.getItem('friend-diary');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState('');
   const [author, setAuthor] = useState('');
 
-  useEffect(() => {
-    localStorage.setItem('friend-diary', JSON.stringify(notes));
-  }, [notes]);
+  const notesRef = collection(db, 'diary-notes');
 
-  const addNote = () => {
+  useEffect(() => {
+    const q = query(notesRef, orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedNotes = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setNotes(fetchedNotes);
+    });
+
+    
+
+    return () => unsubscribe();
+  }, []);
+
+  const addNote = async () => {
     if (newNote.trim() === '' || author.trim() === '') return;
 
-    const newEntry = {
-      id: Date.now(),
+    await addDoc(notesRef, {
       title: `From ${author}`,
       message: newNote.trim(),
       date: new Date().toLocaleDateString('en-IN', {
@@ -25,15 +35,15 @@ export default function DiaryPage() {
         month: 'long',
         year: 'numeric',
       }),
-    };
+      timestamp: new Date(),
+    });
 
-    setNotes([newEntry, ...notes]);
     setNewNote('');
     setAuthor('');
   };
 
-  const deleteNote = (id) => {
-    setNotes(notes.filter(note => note.id !== id));
+  const deleteNote = async (id) => {
+    await deleteDoc(doc(db, 'diary-notes', id));
   };
 
   return (
